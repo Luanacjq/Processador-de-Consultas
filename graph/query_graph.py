@@ -8,41 +8,67 @@ class QueryGraph:
     def build(self, parsed_query):
         self.graph.clear()
 
-        # Tabelas
-        for table in parsed_query['from']:
+        tables = parsed_query["from"]
+        conditions = parsed_query["where"]
+
+        # TABELAS
+        for table in tables:
             self.graph.add_node(table, type="table")
 
-        # Seleção (WHERE)
-        if parsed_query['where']:
-            select_node = "SELECT_OP"
-            self.graph.add_node(select_node, type="selection")
+        last_nodes = tables.copy()
 
-            for table in parsed_query['from']:
-                self.graph.add_edge(table, select_node)
-        else:
-            select_node = None
+        # SELEÇÃO (reduz tuplas)
+        if conditions:
+            selection_nodes = []
 
-        # Projeção (SELECT)
-        proj_node = "PROJECTION"
-        self.graph.add_node(proj_node, type="projection")
+            for i, cond in enumerate(conditions):
+                node = f"SELECT_{i}"
+                self.graph.add_node(node, type="selection", condition=cond)
 
-        if select_node:
-            self.graph.add_edge(select_node, proj_node)
-        else:
-            for table in parsed_query['from']:
-                self.graph.add_edge(table, proj_node)
+                for table in tables:
+                    self.graph.add_edge(table, node)
+
+                selection_nodes.append(node)
+
+            last_nodes = selection_nodes
+
+        # JOIN
+        if len(last_nodes) > 1:
+            join_node = "JOIN"
+            self.graph.add_node(join_node, type="join")
+
+            for node in last_nodes:
+                self.graph.add_edge(node, join_node)
+
+            last_nodes = [join_node]
+
+        # PROJEÇÃO (reduz atributos)
+        proj = "PROJECTION"
+        self.graph.add_node(proj, type="projection")
+
+        for node in last_nodes:
+            self.graph.add_edge(node, proj)
 
         return self.graph
 
     def draw(self):
         pos = nx.spring_layout(self.graph)
+
+        labels = {}
+        for node, data in self.graph.nodes(data=True):
+            if data.get("type") == "selection":
+                labels[node] = f"{node}\n({data['condition']})"
+            else:
+                labels[node] = node
+
         nx.draw(
             self.graph,
             pos,
+            labels=labels,
             with_labels=True,
             node_color="lightblue",
-            node_size=2000,
-            font_size=10
+            node_size=2500
         )
-        plt.title("Grafo de Operadores")
+
+        plt.title("Grafo de Operadores (OTIMIZADO)")
         plt.show()

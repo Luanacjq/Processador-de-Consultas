@@ -1,10 +1,8 @@
-
 import networkx as nx
 
 class QueryProcessor:
     def execution_order(self, graph):
         try:
-            order = list(nx.topological_sort(graph))
-            return order
+            return list(nx.topological_sort(graph))
         except:
-            return []
+            raise ValueError("Erro ao gerar ordem de execução")
