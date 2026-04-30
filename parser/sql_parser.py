@@ -1,84 +1,53 @@
 import re
-from database.schema import SCHEMA
 
-class SQLParser:
-    def parse(self, query):
-        query = query.strip().replace("\n", " ")
-        query = re.sub(r"\s+", " ", query)
+def parse_sql(query):
+    query = query.lower()
+    query = re.sub(r"\s+", " ", query).strip()
 
-        pattern = re.compile(
-            r"""
-            SELECT\s+(?P<select>.+?)\s+
-            FROM\s+(?P<from>.+?)
-            (?:\s+WHERE\s+(?P<where>.+))?
-            $
-            """,
-            re.IGNORECASE | re.VERBOSE
-        )
+    # SELECT
+    select_match = re.search(r"select (.+?) from", query)
+    if not select_match:
+        raise ValueError("SELECT inválido")
 
-        match = pattern.match(query)
+    select_fields = [s.strip() for s in select_match.group(1).split(",")]
 
-        if not match:
-            raise ValueError("Consulta SQL inválida")
+    # FROM + INNER JOIN
+    from_match = re.search(r"from (.+?)( where|$)", query)
+    if not from_match:
+        raise ValueError("FROM inválido")
 
-        select_part = match.group("select")
-        from_part = match.group("from")
-        where_part = match.group("where")
+    from_part = from_match.group(1)
 
-        select_fields = [f.strip() for f in select_part.split(",")]
+    join_pattern = r"inner join\s+(\w+)\s+on\s+([^ ]+ [=<>]+ [^ ]+)"
+    joins = re.findall(join_pattern, from_part)
 
-        # =========================
-        # JOIN
-        # =========================
-        tables = []
-        joins = []
+    first_table = re.split(r"inner join", from_part)[0].strip()
 
-        parts = re.split(r"INNER JOIN", from_part, flags=re.IGNORECASE)
+    tables = [first_table]
+    join_conditions = []
 
-        tables.append(parts[0].strip())
+    for table, condition in joins:
+        tables.append(table.strip())
+        join_conditions.append(condition.strip())
 
-        for part in parts[1:]:
-            join_match = re.search(r"(\w+)\s+ON\s+(.+)", part.strip(), re.IGNORECASE)
-            if not join_match:
-                raise ValueError("Erro no INNER JOIN")
+    # WHERE
+    where_match = re.search(r"where (.+)", query)
+    conditions = []
 
-            tables.append(join_match.group(1))
-            joins.append(join_match.group(2))
+    if where_match:
+        where_clause = where_match.group(1)
 
-        # =========================
-        # VALIDAÇÃO TABELAS
-        # =========================
-        for table in tables:
-            if table not in SCHEMA:
-                raise ValueError(f"Tabela inválida: {table}")
+        conditions = re.split(r"\s+and\s+", where_clause)
 
-        # =========================
-        # VALIDAÇÃO CAMPOS
-        # =========================
-        def validate_field(field):
-            if "." in field:
-                t, c = field.split(".")
-                return t in SCHEMA and c in SCHEMA[t]
-            return any(field in SCHEMA[t] for t in tables)
+        valid_ops = ["=", ">", "<", "<=", ">=", "<>"]
 
-        for field in select_fields:
-            if field != "*" and not validate_field(field):
-                raise ValueError(f"Campo inválido: {field}")
+        for cond in conditions:
+            if not any(op in cond for op in valid_ops):
+                raise ValueError(f"Operador inválido na condição: {cond}")
 
-        # =========================
-        # WHERE
-        # =========================
-        conditions = []
-        if where_part:
-            conditions = re.split(r"\s+AND\s+", where_part, flags=re.IGNORECASE)
-
-            for cond in conditions:
-                if not re.search(r"(=|>|<|<=|>=|<>)", cond):
-                    raise ValueError(f"Condição inválida: {cond}")
-
-        return {
-            "select": select_fields,
-            "from": tables,
-            "joins": joins,
-            "where": conditions
-        }
+    return {
+        "select": select_fields,
+        "tables": tables,
+        "where": conditions,
+        "joins": join_conditions
+    }
