@@ -3,7 +3,7 @@ import customtkinter as ctk
 from parser.sql_parser import parse_sql
 from algebra.relational_algebra import to_relational_algebra
 from heuristics.optimizer import apply_heuristics
-from graph.operator_graph import build_tree_advanced, draw_tree
+from graph.operator_graph import build_tree_advanced, build_optimized_tree, draw_tree
 from utils.validator import validate
 
 class App(ctk.CTk):
@@ -47,19 +47,29 @@ class App(ctk.CTk):
 
             algebra = to_relational_algebra(parsed)
             heuristics = apply_heuristics(parsed)
-            graph = build_tree_advanced(parsed)
 
-            self.output.insert("end", "=== ÁLGEBRA RELACIONAL ===\n")
+            # árvore original
+            self.output.insert("end", "\n=== ÁRVORE ORIGINAL ===\n(Grafo exibido em janela separada)\n")
+            draw_tree(build_tree_advanced(parsed))
+
+            # árvore otimizada
+            self.output.insert("end", "\n=== ÁRVORE OTIMIZADA ===\n(Grafo exibido em janela separada)\n")
+            draw_tree(build_optimized_tree(parsed))
+
+            self.output.insert("end", "\n=== ÁLGEBRA RELACIONAL ===\n")
             self.output.insert("end", algebra + "\n\n")
 
             self.output.insert("end", "=== HEURÍSTICAS ===\n")
             for h in heuristics:
                 self.output.insert("end", h + "\n\n")
 
-            self.output.insert("end", "=== PLANO DE EXECUÇÃO ===\n")
-            self.output.insert("end", "1. Seleção\n2. Junção\n3. Projeção\n")
-
-            draw_tree(graph)
+            self.output.insert("end",
+            "=== PLANO DE EXECUÇÃO ===\n"
+            "1. Aplicar seleções (σ)\n"
+            "2. Aplicar projeções (π)\n"
+            "3. Executar junções (|X|)\n"
+            "4. Projeção final\n"
+            )
 
         except Exception as e:
             self.output.insert("end", f"Erro: {str(e)}")

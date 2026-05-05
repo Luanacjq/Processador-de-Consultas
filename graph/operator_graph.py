@@ -9,7 +9,7 @@ def build_tree_advanced(parsed):
     G.add_node(root)
 
     if parsed["joins"]:
-        join_node = f"|X| {parsed['joins'][0]}"
+        join_node = f"|X| ({' ∧ '.join(parsed['joins'])})"
     else:
         join_node = "|X|"
     G.add_node(join_node)
@@ -115,3 +115,68 @@ def draw_tree(G):
     plt.axis("off")
     plt.tight_layout()
     plt.show()
+
+
+def build_optimized_tree(parsed):
+    G = nx.DiGraph()
+
+    root = f"π {', '.join(parsed['select'])}"
+    G.add_node(root)
+
+    table_weight = {}
+
+    for table in parsed["tables"]:
+        count = 0
+        for cond in parsed["where"]:
+            if cond.startswith(table):
+                count += 1
+        table_weight[table] = count
+
+    sorted_tables = sorted(parsed["tables"], key=lambda t: table_weight[t], reverse=True)
+
+    if parsed["joins"]:
+        join_node = f"|X| ({' ∧ '.join(parsed['joins'])})"
+    else:
+        join_node = "|X| (Produto Cartesiano)"  # heurística importante
+
+    G.add_node(join_node)
+    G.add_edge(root, join_node)
+
+    projections = {}
+
+    for field in parsed["select"]:
+        table = field.split(".")[0]
+        if table not in projections:
+            projections[table] = []
+        projections[table].append(field)
+
+    for table in sorted_tables:
+
+        current = table
+        G.add_node(current)
+
+        if table in projections:
+            proj_node = f"π {', '.join(projections[table])}"
+            G.add_node(proj_node)
+
+            G.add_edge(join_node, proj_node)
+            G.add_edge(proj_node, current)
+
+            current = proj_node
+        else:
+            G.add_edge(join_node, current)
+
+        for cond in parsed["where"]:
+            if cond.startswith(table):
+                sel_node = f"σ {cond}"
+                G.add_node(sel_node)
+
+                if G.has_edge(join_node, current):
+                    G.remove_edge(join_node, current)
+
+                G.add_edge(join_node, sel_node)
+                G.add_edge(sel_node, current)
+
+                current = sel_node
+
+    return G

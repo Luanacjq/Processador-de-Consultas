@@ -17,4 +17,8 @@ def apply_heuristics(parsed):
 
     steps.append("Heurística 2 (Redução de Atributos):\n" + "\n".join(projection_steps))
 
+    steps.append("Heurística 3 (Evitar Produto Cartesiano e Reordenar Junções):\n"
+                 "As tabelas são ordenadas pelas mais restritivas (com mais filtros)\n"
+                 "para reduzir resultados intermediários.")
+
     return steps
